@@ -181,7 +181,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Injeksi JavaScript untuk Mouse Hover Scroll Wheel Override pada input angka, jam, menit, dan sisa kWh
-components.html("""
+wheel_js_code = """
 <script>
 (function() {
     try {
@@ -236,7 +236,12 @@ components.html("""
     } catch (err) {}
 })();
 </script>
-""", height=0, width=0)
+"""
+
+if hasattr(st, "iframe"):
+    st.iframe(wheel_js_code, height=1)
+else:
+    components.html(wheel_js_code, height=0, width=0)
 
 # 3. Logika Perhitungan Konsumsi Listrik
 def calculate_usage(df_input):
