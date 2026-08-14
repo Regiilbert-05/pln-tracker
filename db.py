@@ -369,6 +369,40 @@ def delete_last_entry(meter_id: str):
     except Exception as e:
         return False, f"Gagal menghapus dari CSV: {e}"
 
+def delete_specific_entry(meter_id: str, tanggal_str: str):
+    """Menghapus satu baris pencatatan tertentu berdasarkan meter_id dan string tanggal."""
+    meter_name = str(meter_id).strip()
+    tgl_target = str(tanggal_str).strip()
+
+    # 1. MongoDB
+    coll, _ = get_mongo_collection()
+    if coll is not None:
+        try:
+            res = coll.delete_one({"meter_id": meter_name, "tanggal": tgl_target})
+            if res.deleted_count > 0:
+                return True, f"Data pencatatan tanggal {tgl_target} berhasil dihapus!"
+            return False, "Data tidak ditemukan di database MongoDB."
+        except Exception as e:
+            return False, f"Gagal menghapus data dari MongoDB: {e}"
+
+    # 2. Fallback CSV
+    try:
+        if os.path.exists(DATA_FILE):
+            df_all = pd.read_csv(DATA_FILE)
+            if not df_all.empty and 'tanggal' in df_all.columns:
+                if 'meter_id' not in df_all.columns:
+                    df_all['meter_id'] = DEFAULT_METER
+                
+                mask = (df_all['meter_id'].astype(str) == meter_name) & (df_all['tanggal'].astype(str) == tgl_target)
+                if mask.any():
+                    drop_idx = df_all[mask].index[0]
+                    df_updated = df_all.drop(drop_idx)
+                    df_updated.to_csv(DATA_FILE, index=False)
+                    return True, f"Data pencatatan tanggal {tgl_target} berhasil dihapus!"
+        return False, "Data tidak ditemukan."
+    except Exception as e:
+        return False, f"Gagal menghapus data dari CSV: {e}"
+
 def export_meter_csv(meter_id: str) -> bytes:
     """Mengekspor data riwayat meteran tertentu ke format CSV bytes untuk diunduh."""
     df = load_data(meter_id)
