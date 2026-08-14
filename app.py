@@ -570,62 +570,73 @@ with tab_input:
         last_kwh_val = 20.0
         st.info("📌 Masukkan angka sisa kWh yang sedang tertera pada layar meteran fisik Anda.")
 
-    # 1. Waktu Pencatatan (2-in-1 Pop-up Picker: Otomatis Collapse saat Klik Luar)
+    # 1. Waktu Pencatatan (Langsung di Form: Mendukung Scroll Wheel & Preset Cepat)
     st.markdown("##### 📅 1. Waktu Pencatatan")
     
-    if "input_datetime" not in st.session_state:
-        st.session_state["input_datetime"] = datetime.now()
-        
-    dt_current = st.session_state["input_datetime"]
-    dt_formatted = dt_current.strftime('%d/%m/%Y — %H:%M WIB')
+    # Inisialisasi state waktu jika belum ada
+    if "input_date" not in st.session_state:
+        st.session_state["input_date"] = datetime.now().date()
+    if "input_hour" not in st.session_state:
+        st.session_state["input_hour"] = datetime.now().hour
+    if "input_minute" not in st.session_state:
+        st.session_state["input_minute"] = datetime.now().minute
 
-    col_btn, col_info = st.columns([1.6, 2.4], vertical_alignment="center")
-    
-    with col_btn:
-        with st.popover(f"🗓️ {dt_formatted}", use_container_width=True):
-            st.markdown("###### 🕒 Atur Tanggal & Jam")
-            
-            # Preset Cepat
-            st.caption("Pilihan Cepat:")
-            p_c1, p_c2, p_c3, p_c4 = st.columns(4)
-            with p_c1:
-                if st.button("🕒 Sekarang", use_container_width=True):
-                    st.session_state["input_datetime"] = datetime.now()
-                    st.rerun()
-            with p_c2:
-                if st.button("🌅 08:00", use_container_width=True):
-                    st.session_state["input_datetime"] = dt_current.replace(hour=8, minute=0)
-                    st.rerun()
-            with p_c3:
-                if st.button("☀️ 13:00", use_container_width=True):
-                    st.session_state["input_datetime"] = dt_current.replace(hour=13, minute=0)
-                    st.rerun()
-            with p_c4:
-                if st.button("🌙 21:00", use_container_width=True):
-                    st.session_state["input_datetime"] = dt_current.replace(hour=21, minute=0)
-                    st.rerun()
-                    
-            st.markdown("---")
-            
-            # Pemilih Kalender Tanggal
-            tgl_pick = st.date_input("Tanggal", value=dt_current.date())
-            
-            # Pemilih Jam & Menit (Scroll Wheel & Stepper +/- Ready)
-            cj, cm = st.columns(2)
-            with cj:
-                jam_pick = st.number_input("Jam (00 - 23)", min_value=0, max_value=23, value=dt_current.hour, step=1, format="%02d", help="Hover mouse lalu scroll roda mouse untuk mengganti jam")
-            with cm:
-                menit_pick = st.number_input("Menit (00 - 59)", min_value=0, max_value=59, value=dt_current.minute, step=1, format="%02d", help="Hover mouse lalu scroll roda mouse untuk mengganti menit")
-                
-            new_dt = datetime(tgl_pick.year, tgl_pick.month, tgl_pick.day, int(jam_pick), int(menit_pick))
-            if new_dt != dt_current:
-                st.session_state["input_datetime"] = new_dt
-                st.rerun()
-                
-    with col_info:
-        st.caption("👈 *Klik tombol waktu untuk ubah kalender/jam. Hover mouse & scroll roda untuk ubah jam/menit.*")
+    # Preset Cepat 1-Klik
+    q_col1, q_col2, q_col3, q_col4, _ = st.columns([1.2, 1.2, 1.2, 1.2, 3])
+    with q_col1:
+        if st.button("🕒 Sekarang", use_container_width=True):
+            now_dt = datetime.now()
+            st.session_state["input_date"] = now_dt.date()
+            st.session_state["input_hour"] = now_dt.hour
+            st.session_state["input_minute"] = now_dt.minute
+            st.rerun()
+    with q_col2:
+        if st.button("🌅 08:00", use_container_width=True):
+            st.session_state["input_hour"] = 8
+            st.session_state["input_minute"] = 0
+            st.rerun()
+    with q_col3:
+        if st.button("☀️ 13:00", use_container_width=True):
+            st.session_state["input_hour"] = 13
+            st.session_state["input_minute"] = 0
+            st.rerun()
+    with q_col4:
+        if st.button("🌙 21:00", use_container_width=True):
+            st.session_state["input_hour"] = 21
+            st.session_state["input_minute"] = 0
+            st.rerun()
 
-    waktu_terpilih = st.session_state["input_datetime"]
+    # Kolom Input Tanggal, Jam, dan Menit
+    col_tgl, col_jam, col_menit = st.columns([2, 1, 1])
+    with col_tgl:
+        tgl_pick = st.date_input("Tanggal Pencatatan", value=st.session_state["input_date"])
+    with col_jam:
+        jam_pick = st.number_input(
+            "Jam (00 - 23)",
+            min_value=0,
+            max_value=23,
+            value=st.session_state["input_hour"],
+            step=1,
+            format="%02d",
+            help="Hover mouse dan scroll roda mouse untuk mengubah jam"
+        )
+    with col_menit:
+        menit_pick = st.number_input(
+            "Menit (00 - 59)",
+            min_value=0,
+            max_value=59,
+            value=st.session_state["input_minute"],
+            step=1,
+            format="%02d",
+            help="Hover mouse dan scroll roda mouse untuk mengubah menit"
+        )
+
+    waktu_terpilih = datetime(
+        tgl_pick.year, tgl_pick.month, tgl_pick.day,
+        int(jam_pick), int(menit_pick)
+    )
+
+    st.caption(f"🕒 *Waktu Tersimpan:* **{waktu_terpilih.strftime('%A, %d/%m/%Y — %H:%M')} WIB** (Arahkan kursor & scroll roda mouse pada Jam / Menit untuk mengubah)")
     st.markdown("---")
 
     # 2. Input Sisa Meteran Fisik & Token
