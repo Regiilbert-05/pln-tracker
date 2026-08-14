@@ -1,12 +1,12 @@
 @echo off
-title PLN Electricity Tracker
+title PLN Electricity Tracker Cloud
 echo ========================================================
 echo   ⚡ Menjalankan PLN Electricity Tracker Web App
 echo ========================================================
 echo.
 
-:: Cek apakah streamlit sudah terinstall
-python -c "import streamlit, pandas, plotly" >nul 2>&1
+:: Cek apakah streamlit dan dependensi sudah terinstall
+python -c "import streamlit, pandas, plotly, pymongo" >nul 2>&1
 if %errorlevel% neq 0 (
     echo [INFO] Menginstal dependensi yang dibutuhkan...
     python -m pip install -r requirements.txt

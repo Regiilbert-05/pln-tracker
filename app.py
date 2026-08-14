@@ -5,9 +5,11 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+import db
+
 # 1. Konfigurasi Halaman Web
 st.set_page_config(
-    page_title="PLN Electricity Tracker",
+    page_title="PLN Electricity Tracker (Multi-User Cloud)",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -69,64 +71,88 @@ st.markdown("""
     .badge-success { background-color: #DCFCE7; color: #166534; }
     .badge-warning { background-color: #FEF3C7; color: #92400E; }
     .badge-danger  { background-color: #FEE2E2; color: #991B1B; }
+    .db-badge {
+        font-size: 0.78rem;
+        padding: 0.3rem 0.6rem;
+        border-radius: 6px;
+        background-color: #F1F5F9;
+        border: 1px solid #CBD5E1;
+        margin-bottom: 0.8rem;
+        display: inline-block;
+        width: 100%;
+        text-align: center;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-DATA_FILE = 'data_listrik.csv'
-
-def load_data():
-    if os.path.exists(DATA_FILE):
-        try:
-            df = pd.read_csv(DATA_FILE)
-            if not df.empty and 'tanggal' in df.columns:
-                df['tanggal'] = pd.to_datetime(df['tanggal'])
-                df['kwh_meter'] = pd.to_numeric(df['kwh_meter'], errors='coerce').fillna(0.0)
-                df['isi_token_rp'] = pd.to_numeric(df['isi_token_rp'], errors='coerce').fillna(0)
-                df['isi_token_kwh'] = pd.to_numeric(df['isi_token_kwh'], errors='coerce').fillna(0.0)
-                df = df.sort_values('tanggal').reset_index(drop=True)
-                return df
-        except Exception as e:
-            st.error(f"Gagal memuat data CSV: {e}")
-    return pd.DataFrame(columns=['tanggal', 'kwh_meter', 'isi_token_rp', 'isi_token_kwh'])
-
-def save_data(df):
-    df_to_save = df.copy()
-    if 'kwh_terpakai' in df_to_save.columns:
-        df_to_save = df_to_save.drop(columns=['kwh_terpakai'])
-    if 'tanggal' in df_to_save.columns:
-        df_to_save['tanggal'] = pd.to_datetime(df_to_save['tanggal']).dt.strftime('%Y-%m-%d %H:%M')
-    df_to_save.to_csv(DATA_FILE, index=False)
-
-def calculate_usage(df):
-    if df.empty:
-        return df
+# 3. Logika Perhitungan Konsumsi Listrik
+def calculate_usage(df_input):
+    if df_input.empty:
+        return df_input
     
-    df = df.copy().sort_values('tanggal').reset_index(drop=True)
-    df['kwh_terpakai'] = 0.0
+    df_calc = df_input.copy().sort_values('tanggal').reset_index(drop=True)
+    df_calc['kwh_terpakai'] = 0.0
     
-    for i in range(1, len(df)):
-        kwh_sebelum = df.loc[i-1, 'kwh_meter']
-        kwh_sekarang = df.loc[i, 'kwh_meter']
-        isi_token = df.loc[i, 'isi_token_kwh']
+    for i in range(1, len(df_calc)):
+        kwh_sebelum = df_calc.loc[i-1, 'kwh_meter']
+        kwh_sekarang = df_calc.loc[i, 'kwh_meter']
+        isi_token = df_calc.loc[i, 'isi_token_kwh']
         
         # Rumus kWh Terpakai = (Sisa kWh Sebelumnya + Token yang diisi) - Sisa kWh Sekarang
         terpakai = (kwh_sebelum + isi_token) - kwh_sekarang
-        df.loc[i, 'kwh_terpakai'] = round(max(0.0, terpakai), 2)
+        df_calc.loc[i, 'kwh_terpakai'] = round(max(0.0, terpakai), 2)
         
-    return df
-
-# Load & Proses
-df_raw = load_data()
-df = calculate_usage(df_raw)
+    return df_calc
 
 # --- SIDEBAR ---
-st.sidebar.markdown("## ⚡ PLN Tracker")
-st.sidebar.caption("Sistem Pelacakan Konsumsi Token Listrik Lokal")
+st.sidebar.markdown("## ⚡ PLN Tracker Cloud")
+st.sidebar.caption("Sistem Pelacakan Konsumsi Token Listrik Multi-User")
 
-tab_nav = st.sidebar.radio("Navigasi Sidebar", ["📝 Catat Baru", "⚙️ Kelola Database"], label_visibility="collapsed")
+# Status Database
+status_type, status_text = db.get_db_status()
+st.sidebar.markdown(f"<div class='db-badge'>{status_text}</div>", unsafe_allow_html=True)
+
+# --- Profil / Pilihan Meteran ---
+st.sidebar.markdown("### 🏠 Pilih Meteran / Pengguna")
+meter_list = db.get_meter_list()
+options = meter_list + ["➕ Tambah Profil Baru"]
+
+if "selected_meter" not in st.session_state or st.session_state["selected_meter"] not in meter_list:
+    st.session_state["selected_meter"] = meter_list[0]
+
+selected_option = st.sidebar.selectbox(
+    "Profil Meteran Aktif",
+    options=options,
+    index=meter_list.index(st.session_state["selected_meter"]) if st.session_state["selected_meter"] in meter_list else 0,
+    label_visibility="collapsed"
+)
+
+if selected_option == "➕ Tambah Profil Baru":
+    new_meter_name = st.sidebar.text_input("Nama Meteran / Lokasi Baru", placeholder="Contoh: Kost Kamar 03, Rumah Ortu")
+    if st.sidebar.button("✨ Aktifkan Profil Baru", width="stretch"):
+        if new_meter_name.strip():
+            active_meter = new_meter_name.strip()
+            st.session_state["selected_meter"] = active_meter
+            st.sidebar.success(f"Profil '{active_meter}' diaktifkan!")
+            st.rerun()
+        else:
+            st.sidebar.warning("Masukkan nama profil terlebih dahulu.")
+    active_meter = new_meter_name.strip() if new_meter_name.strip() else "Meteran Baru"
+else:
+    active_meter = selected_option
+    st.session_state["selected_meter"] = active_meter
+
+st.sidebar.markdown("---")
+
+# Load Data untuk Meteran Aktif
+df_raw = db.load_data(active_meter)
+df = calculate_usage(df_raw)
+
+# Navigasi Menu Sidebar
+tab_nav = st.sidebar.radio("Navigasi Sidebar", ["📝 Catat Baru", "⚙️ Kelola Data"], label_visibility="collapsed")
 
 if tab_nav == "📝 Catat Baru":
-    st.sidebar.markdown("### 📝 Catat Meteran Baru")
+    st.sidebar.markdown(f"### 📝 Catat Meteran: **{active_meter}**")
     with st.sidebar.form("input_form", clear_on_submit=True):
         now = datetime.now()
         tgl_input = st.date_input("Tanggal Pencatatan", now.date())
@@ -151,20 +177,21 @@ if tab_nav == "📝 Catat Baru":
         submitted = st.form_submit_button("💾 Simpan Data", width="stretch")
         if submitted:
             dt_combined = datetime.combine(tgl_input, waktu_input)
-            new_entry = pd.DataFrame([{
-                'tanggal': dt_combined,
-                'kwh_meter': float(kwh_input),
-                'isi_token_rp': int(isi_rp),
-                'isi_token_kwh': float(isi_kwh)
-            }])
-            
-            updated_df = pd.concat([df_raw, new_entry], ignore_index=True)
-            save_data(updated_df)
-            st.sidebar.success("✅ Data pencatatan berhasil disimpan!")
-            st.rerun()
+            success, msg = db.insert_entry(
+                meter_id=active_meter,
+                tanggal_dt=dt_combined,
+                kwh_meter=float(kwh_input),
+                isi_token_rp=int(isi_rp),
+                isi_token_kwh=float(isi_kwh)
+            )
+            if success:
+                st.sidebar.success(f"✅ {msg}")
+                st.rerun()
+            else:
+                st.sidebar.error(f"❌ {msg}")
 
 else:
-    st.sidebar.markdown("### ⚙️ Manajemen Data")
+    st.sidebar.markdown(f"### ⚙️ Manajemen Data: **{active_meter}**")
     st.sidebar.markdown(f"**Total Baris Data:** {len(df_raw)} entri")
     
     if not df_raw.empty:
@@ -175,33 +202,30 @@ else:
             f"({float(last_row['kwh_meter']):.2f} kWh)"
         )
         if st.sidebar.button("🗑️ Hapus Baris Terakhir", type="secondary", width="stretch"):
-            if len(df_raw) > 1:
-                updated_df = df_raw.iloc[:-1]
-                save_data(updated_df)
-                st.sidebar.success("Entri terakhir berhasil dihapus!")
+            success, msg = db.delete_last_entry(active_meter)
+            if success:
+                st.sidebar.success(msg)
                 st.rerun()
-            elif len(df_raw) == 1:
-                updated_df = pd.DataFrame(columns=['tanggal', 'kwh_meter', 'isi_token_rp', 'isi_token_kwh'])
-                save_data(updated_df)
-                st.sidebar.success("Database dikosongkan.")
-                st.rerun()
+            else:
+                st.sidebar.error(msg)
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("#### 📥 Unduh / Backup CSV")
     if not df_raw.empty:
-        csv_data = df_raw.to_csv(index=False).encode('utf-8')
+        csv_bytes = db.export_meter_csv(active_meter)
+        safe_meter_filename = "".join(c for c in active_meter if c.isalnum() or c in (' ', '_', '-')).rstrip()
         st.sidebar.download_button(
-            label="⬇️ Download data_listrik.csv",
-            data=csv_data,
-            file_name=f"data_listrik_backup_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+            label=f"⬇️ Download CSV ({active_meter})",
+            data=csv_bytes,
+            file_name=f"pln_{safe_meter_filename}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             mime="text/csv",
             width="stretch"
         )
 
 
 # --- DASHBOARD UTAMA ---
-st.markdown("<h1 class='main-header'>⚡ Dashboard Tracker Listrik Prabayar</h1>", unsafe_allow_html=True)
-st.markdown("<p class='sub-header'>Aplikasi mandiri untuk melacak konsumsi listrik, efisiensi harian, dan riwayat token.</p>", unsafe_allow_html=True)
+st.markdown(f"<h1 class='main-header'>⚡ Dashboard Listrik: <span style='color:#2563EB;'>{active_meter}</span></h1>", unsafe_allow_html=True)
+st.markdown("<p class='sub-header'>Aplikasi pelacakan konsumsi listrik prabayar, efisiensi harian, dan riwayat token berbasis cloud.</p>", unsafe_allow_html=True)
 
 if not df.empty:
     sisa_kwh_terakhir = df['kwh_meter'].iloc[-1]
@@ -396,7 +420,7 @@ if not df.empty:
     st.markdown("---")
 
     # Tabel Data Terstruktur
-    st.subheader("📋 Riwayat Database Meteran")
+    st.subheader(f"📋 Riwayat Database ({active_meter})")
     
     view_df = df.copy().sort_values('tanggal', ascending=False).reset_index(drop=True)
     view_df['Waktu'] = view_df['tanggal'].dt.strftime('%d/%m/%Y %H:%M')
@@ -412,4 +436,4 @@ if not df.empty:
     )
 
 else:
-    st.info("👋 **Selamat datang!** Belum ada data pencatatan. Silakan masukkan data pertama Anda pada form di sidebar sebelah kiri.")
+    st.info(f"👋 **Selamat datang di profil '{active_meter}'!** Belum ada data pencatatan untuk meteran ini. Silakan masukkan data pertama Anda pada form di sidebar sebelah kiri.")
