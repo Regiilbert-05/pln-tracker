@@ -113,34 +113,50 @@ status_type, status_text = db.get_db_status()
 st.sidebar.markdown(f"<div class='db-badge'>{status_text}</div>", unsafe_allow_html=True)
 
 # --- Profil / Pilihan Meteran ---
-st.sidebar.markdown("### 🏠 Pilih Meteran / Pengguna")
+st.sidebar.markdown("### 🏠 Profil Meteran / Pengguna")
 meter_list = db.get_meter_list()
-options = meter_list + ["➕ Tambah Profil Baru"]
 
-if "selected_meter" not in st.session_state or st.session_state["selected_meter"] not in meter_list:
-    st.session_state["selected_meter"] = meter_list[0]
+# Cek URL query parameter terlebih dahulu agar tahan refresh browser (F5)
+query_meter = st.query_params.get("meter", None)
+if query_meter and query_meter in meter_list:
+    default_meter = query_meter
+elif "selected_meter" in st.session_state and st.session_state["selected_meter"] in meter_list:
+    default_meter = st.session_state["selected_meter"]
+else:
+    default_meter = meter_list[0]
+
+options = meter_list + ["➕ Tambah Profil Baru"]
+default_index = meter_list.index(default_meter) if default_meter in meter_list else 0
 
 selected_option = st.sidebar.selectbox(
-    "Profil Meteran Aktif",
+    "Pilih Meteran",
     options=options,
-    index=meter_list.index(st.session_state["selected_meter"]) if st.session_state["selected_meter"] in meter_list else 0,
+    index=default_index,
     label_visibility="collapsed"
 )
 
 if selected_option == "➕ Tambah Profil Baru":
-    new_meter_name = st.sidebar.text_input("Nama Meteran / Lokasi Baru", placeholder="Contoh: Kost Kamar 03, Rumah Ortu")
-    if st.sidebar.button("✨ Aktifkan Profil Baru", width="stretch"):
-        if new_meter_name.strip():
-            active_meter = new_meter_name.strip()
-            st.session_state["selected_meter"] = active_meter
-            st.sidebar.success(f"Profil '{active_meter}' diaktifkan!")
-            st.rerun()
-        else:
-            st.sidebar.warning("Masukkan nama profil terlebih dahulu.")
-    active_meter = new_meter_name.strip() if new_meter_name.strip() else "Meteran Baru"
+    with st.sidebar.container():
+        st.markdown("**➕ Tambah Profil Baru**")
+        new_meter_name = st.text_input("Nama Profil (Lokasi / Nama)", placeholder="Misal: Kost Kamar 03, Toko").strip()
+        if st.button("💾 Daftarkan & Simpan Profil", width="stretch", type="primary"):
+            if new_meter_name:
+                ok, msg = db.register_meter(new_meter_name)
+                if ok:
+                    st.session_state["selected_meter"] = new_meter_name
+                    st.query_params["meter"] = new_meter_name
+                    st.sidebar.success(f"✅ Profil '{new_meter_name}' tersimpan!")
+                    st.rerun()
+                else:
+                    st.sidebar.error(f"❌ {msg}")
+            else:
+                st.sidebar.warning("Silakan masukkan nama profil.")
+    active_meter = new_meter_name if new_meter_name else "Meteran Baru"
 else:
     active_meter = selected_option
     st.session_state["selected_meter"] = active_meter
+    # Sinkronisasi ke URL parameter agar tidak hilang saat di-refresh browser
+    st.query_params["meter"] = active_meter
 
 st.sidebar.markdown("---")
 
@@ -221,6 +237,23 @@ else:
             mime="text/csv",
             width="stretch"
         )
+    else:
+        st.sidebar.caption("Belum ada data untuk diunduh.")
+
+    # Opsi Hapus Profil jika bukan profile default
+    if active_meter != db.DEFAULT_METER:
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("#### ⚠️ Hapus Profil Meteran")
+        st.sidebar.caption(f"Hapus profil **'{active_meter}'** beserta seluruh datanya secara permanen.")
+        if st.sidebar.button(f"🚨 Hapus Profil '{active_meter}'", type="secondary", width="stretch"):
+            ok, msg = db.delete_meter_profile(active_meter)
+            if ok:
+                st.session_state["selected_meter"] = db.DEFAULT_METER
+                st.query_params["meter"] = db.DEFAULT_METER
+                st.sidebar.success(msg)
+                st.rerun()
+            else:
+                st.sidebar.error(msg)
 
 
 # --- DASHBOARD UTAMA ---

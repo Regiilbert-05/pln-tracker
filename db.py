@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 
 DATA_FILE = 'data_listrik.csv'
+PROFILES_FILE = 'profil_meteran.csv'
 DEFAULT_METER = "Rumah Utama"
 
 def _get_mongo_credentials():
@@ -47,7 +48,7 @@ def _init_mongo_client(uri: str):
         return None, str(e)
 
 def get_mongo_collection():
-    """Mengembalikan objek collection MongoDB jika berhasil terhubung, atau None jika gagal/tidak ada."""
+    """Mengembalikan objek collection MongoDB untuk records jika berhasil terhubung."""
     uri, db_name, coll_name = _get_mongo_credentials()
     if not uri:
         return None, "Kredensial MongoDB belum disetel di .streamlit/secrets.toml"
@@ -59,6 +60,23 @@ def get_mongo_collection():
     try:
         db = client[db_name]
         collection = db[coll_name]
+        return collection, None
+    except Exception as e:
+        return None, str(e)
+
+def get_mongo_profiles_collection():
+    """Mengembalikan objek collection MongoDB untuk daftar profil meteran."""
+    uri, db_name, _ = _get_mongo_credentials()
+    if not uri:
+        return None, "Kredensial MongoDB belum disetel"
+    
+    client, error = _init_mongo_client(uri)
+    if client is None:
+        return None, error
+    
+    try:
+        db = client[db_name]
+        collection = db["meter_profiles"]
         return collection, None
     except Exception as e:
         return None, str(e)
@@ -76,35 +94,149 @@ def get_db_status():
         return "csv", "🟡 Mode Penyimpanan Lokal (data_listrik.csv)"
 
 # ==========================================
-# CRUD Operations (Support Multi-Meter & Multi-User)
+# Profile / Meter Registry Operations
 # ==========================================
 
 def get_meter_list():
-    """Mengambil daftar nama profil meteran yang terdaftar."""
-    coll, _ = get_mongo_collection()
-    if coll is not None:
+    """Mengambil daftar seluruh profil meteran yang terdaftar dan memiliki data."""
+    meters = set()
+    meters.add(DEFAULT_METER)
+
+    # 1. Cek dari MongoDB
+    coll_prof, _ = get_mongo_profiles_collection()
+    if coll_prof is not None:
         try:
-            meters = coll.distinct("meter_id")
-            meters = [m for m in meters if m and str(m).strip()]
-            if not meters:
-                return [DEFAULT_METER]
-            return sorted(meters)
+            for doc in coll_prof.find({}, {"name": 1}):
+                name = str(doc.get("name", "")).strip()
+                if name:
+                    meters.add(name)
         except Exception:
             pass
 
-    # Fallback CSV
+    coll_rec, _ = get_mongo_collection()
+    if coll_rec is not None:
+        try:
+            for m in coll_rec.distinct("meter_id"):
+                name = str(m).strip()
+                if name:
+                    meters.add(name)
+        except Exception:
+            pass
+
+    # 2. Cek dari CSV Profil Lokal
+    if os.path.exists(PROFILES_FILE):
+        try:
+            df_prof = pd.read_csv(PROFILES_FILE)
+            if 'meter_id' in df_prof.columns:
+                for m in df_prof['meter_id'].dropna():
+                    name = str(m).strip()
+                    if name:
+                        meters.add(name)
+        except Exception:
+            pass
+
+    # 3. Cek dari CSV Data Lokal
     if os.path.exists(DATA_FILE):
         try:
-            df = pd.read_csv(DATA_FILE)
-            if 'meter_id' in df.columns:
-                meters = df['meter_id'].dropna().unique().tolist()
-                meters = [str(m).strip() for m in meters if str(m).strip()]
-                if meters:
-                    return sorted(meters)
+            df_data = pd.read_csv(DATA_FILE)
+            if 'meter_id' in df_data.columns:
+                for m in df_data['meter_id'].dropna():
+                    name = str(m).strip()
+                    if name:
+                        meters.add(name)
         except Exception:
             pass
 
-    return [DEFAULT_METER]
+    sorted_meters = sorted(list(meters))
+    # Pastikan DEFAULT_METER selalu berada di urutan awal jika ada
+    if DEFAULT_METER in sorted_meters:
+        sorted_meters.remove(DEFAULT_METER)
+        sorted_meters.insert(0, DEFAULT_METER)
+        
+    return sorted_meters
+
+def register_meter(meter_name: str):
+    """Mendaftarkan profil meteran baru ke database agar tersimpan permanen."""
+    name = str(meter_name).strip()
+    if not name:
+        return False, "Nama meteran tidak boleh kosong."
+
+    # 1. Simpan ke MongoDB jika tersedia
+    coll_prof, _ = get_mongo_profiles_collection()
+    if coll_prof is not None:
+        try:
+            coll_prof.update_one(
+                {"name": name},
+                {"$set": {"name": name, "updated_at": datetime.utcnow()}},
+                upsert=True
+            )
+        except Exception as e:
+            return False, f"Gagal mendaftarkan profil di MongoDB: {e}"
+
+    # 2. Simpan juga ke file profil lokal
+    try:
+        if os.path.exists(PROFILES_FILE):
+            df_prof = pd.read_csv(PROFILES_FILE)
+            if 'meter_id' not in df_prof.columns:
+                df_prof = pd.DataFrame(columns=['meter_id'])
+        else:
+            df_prof = pd.DataFrame(columns=['meter_id'])
+
+        if name not in df_prof['meter_id'].astype(str).values:
+            new_row = pd.DataFrame([{'meter_id': name}])
+            df_prof = pd.concat([df_prof, new_row], ignore_index=True)
+            df_prof.to_csv(PROFILES_FILE, index=False)
+
+        return True, f"Profil '{name}' berhasil didaftarkan dan disimpan permanen!"
+    except Exception as e:
+        return False, f"Gagal menyimpan profil lokal: {e}"
+
+def delete_meter_profile(meter_name: str):
+    """Menghapus profil meteran beserta seluruh catatan riwayatnya."""
+    name = str(meter_name).strip()
+    if name == DEFAULT_METER:
+        return False, f"Profil '{DEFAULT_METER}' adalah profil bawaan dan tidak dapat dihapus."
+
+    # 1. Hapus dari MongoDB
+    coll_prof, _ = get_mongo_profiles_collection()
+    if coll_prof is not None:
+        try:
+            coll_prof.delete_many({"name": name})
+        except Exception:
+            pass
+
+    coll_rec, _ = get_mongo_collection()
+    if coll_rec is not None:
+        try:
+            coll_rec.delete_many({"meter_id": name})
+        except Exception:
+            pass
+
+    # 2. Hapus dari CSV Profil Lokal
+    if os.path.exists(PROFILES_FILE):
+        try:
+            df_prof = pd.read_csv(PROFILES_FILE)
+            if 'meter_id' in df_prof.columns:
+                df_prof = df_prof[df_prof['meter_id'].astype(str) != name]
+                df_prof.to_csv(PROFILES_FILE, index=False)
+        except Exception:
+            pass
+
+    # 3. Hapus data dari CSV Data Lokal
+    if os.path.exists(DATA_FILE):
+        try:
+            df_data = pd.read_csv(DATA_FILE)
+            if 'meter_id' in df_data.columns:
+                df_data = df_data[df_data['meter_id'].astype(str) != name]
+                df_data.to_csv(DATA_FILE, index=False)
+        except Exception:
+            pass
+
+    return True, f"Profil '{name}' dan seluruh riwayatnya berhasil dihapus."
+
+# ==========================================
+# CRUD Operations (Data Records)
+# ==========================================
 
 def load_data(meter_id: str = DEFAULT_METER):
     """
@@ -158,13 +290,17 @@ def load_data(meter_id: str = DEFAULT_METER):
 
 def insert_entry(meter_id: str, tanggal_dt: datetime, kwh_meter: float, isi_token_rp: int = 0, isi_token_kwh: float = 0.0):
     """Menyimpan 1 baris pencatatan baru ke MongoDB atau CSV fallback."""
+    meter_name = str(meter_id).strip()
     tanggal_str = tanggal_dt.strftime('%Y-%m-%d %H:%M')
+    
+    # Pastikan profil terdaftar secara otomatis
+    register_meter(meter_name)
     
     coll, _ = get_mongo_collection()
     if coll is not None:
         try:
             doc = {
-                "meter_id": str(meter_id).strip(),
+                "meter_id": meter_name,
                 "tanggal": tanggal_str,
                 "kwh_meter": float(kwh_meter),
                 "isi_token_rp": int(isi_token_rp),
@@ -183,7 +319,7 @@ def insert_entry(meter_id: str, tanggal_dt: datetime, kwh_meter: float, isi_toke
             'kwh_meter': float(kwh_meter),
             'isi_token_rp': int(isi_token_rp),
             'isi_token_kwh': float(isi_token_kwh),
-            'meter_id': str(meter_id).strip()
+            'meter_id': meter_name
         }])
         
         if os.path.exists(DATA_FILE):
