@@ -1,19 +1,26 @@
 import os
+import sys
 from datetime import datetime
+from pathlib import Path
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-import db
-
-# 1. Konfigurasi Halaman Web
+# 1. Konfigurasi Halaman Web (WAJIB dipanggil pertama sebelum perintah Streamlit lain)
 st.set_page_config(
     page_title="PLN Electricity Tracker (Multi-User Cloud)",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Pastikan path direktori root masuk ke sys.path untuk deployment Streamlit Cloud
+CURRENT_DIR = str(Path(__file__).parent.resolve())
+if CURRENT_DIR not in sys.path:
+    sys.path.insert(0, CURRENT_DIR)
+
+import db
 
 # 2. Custom CSS Modern (Light & Dark Mode Adaptive)
 st.markdown("""

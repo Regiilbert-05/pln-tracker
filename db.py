@@ -3,8 +3,9 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
-DATA_FILE = 'data_listrik.csv'
-PROFILES_FILE = 'profil_meteran.csv'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_FILE = os.path.join(BASE_DIR, 'data_listrik.csv')
+PROFILES_FILE = os.path.join(BASE_DIR, 'profil_meteran.csv')
 DEFAULT_METER = "Rumah Utama"
 
 def _get_mongo_credentials():
