@@ -228,10 +228,19 @@ wheel_js_code = """
             if (min !== null && newVal < min) newVal = min;
             if (max !== null && newVal > max) newVal = max;
 
+            // Fokus, set value, dan dispatch event komplit agar langsung ter-commit ke backend Streamlit
+            try { input.focus(); } catch(e) {}
+            
             const nativeSetter = Object.getOwnPropertyDescriptor(parentWin.HTMLInputElement.prototype, 'value').set;
             nativeSetter.call(input, newVal);
+
             input.dispatchEvent(new Event('input', { bubbles: true }));
             input.dispatchEvent(new Event('change', { bubbles: true }));
+            
+            // Simulasi Enter key & Blur agar Streamlit widget manager langsung mengirim nilai baru ke Python
+            input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+            input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+            input.dispatchEvent(new Event('blur', { bubbles: true }));
         }, { passive: false });
     } catch (err) {}
 })();
