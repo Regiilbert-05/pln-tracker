@@ -20,7 +20,9 @@ CURRENT_DIR = str(Path(__file__).parent.resolve())
 if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
+import importlib
 import db
+importlib.reload(db)
 
 # 2. Custom CSS Modern (Harmonis Penuh Light & Dark Mode via Streamlit Theme Variables)
 st.markdown("""
