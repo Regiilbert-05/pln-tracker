@@ -6,6 +6,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 
 # 1. Konfigurasi Halaman Web (WAJIB pertama)
 st.set_page_config(
@@ -180,72 +181,62 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Injeksi JavaScript untuk Mouse Hover Scroll Wheel Override pada input angka, jam, menit, dan sisa kWh
-st.html("""
+components.html("""
 <script>
 (function() {
-    function setupWheelOverride() {
-        try {
-            const doc = window.parent.document || document;
-            const numberContainers = doc.querySelectorAll('div[data-testid="stNumberInput"]');
-            
-            numberContainers.forEach(container => {
-                const input = container.querySelector('input');
-                if (!input || input.dataset.wheelBound === "true") return;
-                input.dataset.wheelBound = "true";
-
-                container.addEventListener('wheel', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    let currentVal = parseFloat(input.value);
-                    if (isNaN(currentVal)) currentVal = 0;
-
-                    let stepAttr = input.getAttribute('step');
-                    let step = stepAttr ? parseFloat(stepAttr) : (input.value.includes('.') ? 0.1 : 1);
-                    if (isNaN(step) || step <= 0) step = 1;
-
-                    let minAttr = input.getAttribute('min');
-                    let maxAttr = input.getAttribute('max');
-                    let min = minAttr !== null ? parseFloat(minAttr) : null;
-                    let max = maxAttr !== null ? parseFloat(maxAttr) : null;
-
-                    // Scroll Up = Tambah (+), Scroll Down = Kurang (-)
-                    let delta = e.deltaY < 0 ? step : -step;
-                    
-                    let decimals = 0;
-                    if (step.toString().includes('.')) {
-                        decimals = step.toString().split('.')[1].length;
-                    } else if (input.value.includes('.')) {
-                        decimals = input.value.split('.')[1].length;
-                    }
-                    
-                    let newVal = parseFloat((currentVal + delta).toFixed(Math.max(decimals, 0)));
-
-                    if (min !== null && newVal < min) newVal = min;
-                    if (max !== null && newVal > max) newVal = max;
-
-                    // Dispatch perubahan nilai ke React Streamlit state
-                    const targetWindow = window.parent || window;
-                    const nativeSetter = Object.getOwnPropertyDescriptor(targetWindow.HTMLInputElement.prototype, 'value').set;
-                    nativeSetter.call(input, newVal);
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
-                }, { passive: false });
-            });
-        } catch (err) {
-            // Ignore if any restriction
-        }
-    }
-
-    setupWheelOverride();
     try {
-        const doc = window.parent.document || document;
-        const obs = new MutationObserver(setupWheelOverride);
-        obs.observe(doc.body, { childList: true, subtree: true });
-    } catch (e) {}
+        const parentDoc = window.parent ? window.parent.document : document;
+        const parentWin = window.parent || window;
+
+        if (parentWin.__wheelOverrideInitialized) return;
+        parentWin.__wheelOverrideInitialized = true;
+
+        parentDoc.addEventListener('wheel', function(e) {
+            const container = e.target.closest('div[data-testid="stNumberInput"]');
+            if (!container) return;
+
+            const input = container.querySelector('input');
+            if (!input) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            let currentVal = parseFloat(input.value);
+            if (isNaN(currentVal)) currentVal = 0;
+
+            let stepAttr = input.getAttribute('step');
+            let step = stepAttr ? parseFloat(stepAttr) : (input.value.includes('.') ? 0.1 : 1.0);
+            if (isNaN(step) || step <= 0) step = 1.0;
+
+            let minAttr = input.getAttribute('min');
+            let maxAttr = input.getAttribute('max');
+            let min = minAttr !== null ? parseFloat(minAttr) : null;
+            let max = maxAttr !== null ? parseFloat(maxAttr) : null;
+
+            // Scroll Up = Tambah (+), Scroll Down = Kurang (-)
+            let delta = e.deltaY < 0 ? step : -step;
+            
+            let decimals = 0;
+            if (step.toString().includes('.')) {
+                decimals = step.toString().split('.')[1].length;
+            } else if (input.value.includes('.')) {
+                decimals = input.value.split('.')[1].length;
+            }
+            
+            let newVal = parseFloat((currentVal + delta).toFixed(Math.max(decimals, 0)));
+
+            if (min !== null && newVal < min) newVal = min;
+            if (max !== null && newVal > max) newVal = max;
+
+            const nativeSetter = Object.getOwnPropertyDescriptor(parentWin.HTMLInputElement.prototype, 'value').set;
+            nativeSetter.call(input, newVal);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        }, { passive: false });
+    } catch (err) {}
 })();
 </script>
-""")
+""", height=0, width=0)
 
 # 3. Logika Perhitungan Konsumsi Listrik
 def calculate_usage(df_input):
