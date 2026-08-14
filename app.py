@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. Custom CSS Modern
+# 2. Custom CSS Modern (Light & Dark Mode Adaptive)
 st.markdown("""
 <style>
     .main-header {
@@ -71,16 +71,121 @@ st.markdown("""
     .badge-success { background-color: #DCFCE7; color: #166534; }
     .badge-warning { background-color: #FEF3C7; color: #92400E; }
     .badge-danger  { background-color: #FEE2E2; color: #991B1B; }
+    
+    /* Database Status Badge */
     .db-badge {
-        font-size: 0.78rem;
-        padding: 0.3rem 0.6rem;
-        border-radius: 6px;
-        background-color: #F1F5F9;
-        border: 1px solid #CBD5E1;
+        font-size: 0.8rem;
+        padding: 0.4rem 0.65rem;
+        border-radius: 8px;
         margin-bottom: 0.8rem;
         display: inline-block;
         width: 100%;
         text-align: center;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        transition: all 0.2s ease;
+    }
+    .db-badge-mongo {
+        background-color: #ECFDF5;
+        border: 1px solid #A7F3D0;
+        color: #065F46;
+    }
+    .db-badge-csv {
+        background-color: #FEFCE8;
+        border: 1px solid #FEF08A;
+        color: #854D0E;
+    }
+    .db-badge-error {
+        background-color: #FEF2F2;
+        border: 1px solid #FECACA;
+        color: #991B1B;
+    }
+
+    /* Dark Mode (OS Prefers & Streamlit Theme Aware) */
+    @media (prefers-color-scheme: dark) {
+        .main-header { color: #F8FAFC !important; }
+        .sub-header { color: #94A3B8 !important; }
+        .metric-box {
+            background-color: #1E293B !important;
+            border-color: #334155 !important;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3) !important;
+        }
+        .metric-label { color: #94A3B8 !important; }
+        .metric-val { color: #F1F5F9 !important; }
+        .metric-desc { color: #60A5FA !important; }
+        
+        .db-badge-mongo {
+            background-color: rgba(6, 95, 70, 0.3) !important;
+            border-color: rgba(52, 211, 153, 0.4) !important;
+            color: #6EE7B7 !important;
+        }
+        .db-badge-csv {
+            background-color: rgba(133, 77, 14, 0.3) !important;
+            border-color: rgba(250, 204, 21, 0.4) !important;
+            color: #FDE047 !important;
+        }
+        .db-badge-error {
+            background-color: rgba(153, 27, 27, 0.3) !important;
+            border-color: rgba(248, 113, 113, 0.4) !important;
+            color: #FCA5A5 !important;
+        }
+        .badge-success {
+            background-color: rgba(22, 101, 52, 0.3) !important;
+            color: #86EFAC !important;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+        .badge-warning {
+            background-color: rgba(146, 64, 14, 0.3) !important;
+            color: #FDE047 !important;
+            border: 1px solid rgba(234, 179, 8, 0.3);
+        }
+        .badge-danger {
+            background-color: rgba(153, 27, 27, 0.3) !important;
+            color: #FCA5A5 !important;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+    }
+
+    [data-theme="dark"] .main-header, [data-base-theme="dark"] .main-header { color: #F8FAFC !important; }
+    [data-theme="dark"] .sub-header, [data-base-theme="dark"] .sub-header { color: #94A3B8 !important; }
+    [data-theme="dark"] .metric-box, [data-base-theme="dark"] .metric-box {
+        background-color: #1E293B !important;
+        border-color: #334155 !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3) !important;
+    }
+    [data-theme="dark"] .metric-label, [data-base-theme="dark"] .metric-label { color: #94A3B8 !important; }
+    [data-theme="dark"] .metric-val, [data-base-theme="dark"] .metric-val { color: #F1F5F9 !important; }
+    [data-theme="dark"] .metric-desc, [data-base-theme="dark"] .metric-desc { color: #60A5FA !important; }
+    
+    [data-theme="dark"] .db-badge-mongo, [data-base-theme="dark"] .db-badge-mongo {
+        background-color: rgba(6, 95, 70, 0.35) !important;
+        border-color: rgba(52, 211, 153, 0.4) !important;
+        color: #6EE7B7 !important;
+    }
+    [data-theme="dark"] .db-badge-csv, [data-base-theme="dark"] .db-badge-csv {
+        background-color: rgba(133, 77, 14, 0.35) !important;
+        border-color: rgba(250, 204, 21, 0.4) !important;
+        color: #FDE047 !important;
+    }
+    [data-theme="dark"] .db-badge-error, [data-base-theme="dark"] .db-badge-error {
+        background-color: rgba(153, 27, 27, 0.35) !important;
+        border-color: rgba(248, 113, 113, 0.4) !important;
+        color: #FCA5A5 !important;
+    }
+    [data-theme="dark"] .badge-success, [data-base-theme="dark"] .badge-success {
+        background-color: rgba(22, 101, 52, 0.35) !important;
+        color: #86EFAC !important;
+        border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    [data-theme="dark"] .badge-warning, [data-base-theme="dark"] .badge-warning {
+        background-color: rgba(146, 64, 14, 0.35) !important;
+        color: #FDE047 !important;
+        border: 1px solid rgba(234, 179, 8, 0.3);
+    }
+    [data-theme="dark"] .badge-danger, [data-base-theme="dark"] .badge-danger {
+        background-color: rgba(153, 27, 27, 0.35) !important;
+        color: #FCA5A5 !important;
+        border: 1px solid rgba(239, 68, 68, 0.3);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -110,7 +215,7 @@ st.sidebar.caption("Sistem Pelacakan Konsumsi Token Listrik Multi-User")
 
 # Status Database
 status_type, status_text = db.get_db_status()
-st.sidebar.markdown(f"<div class='db-badge'>{status_text}</div>", unsafe_allow_html=True)
+st.sidebar.markdown(f"<div class='db-badge db-badge-{status_type}'>{status_text}</div>", unsafe_allow_html=True)
 
 # --- Profil / Pilihan Meteran ---
 st.sidebar.markdown("### 🏠 Profil Meteran / Pengguna")
@@ -364,9 +469,10 @@ if not df.empty:
                     margin=dict(l=20, r=20, t=20, b=20),
                     showlegend=False,
                     coloraxis_showscale=False,
-                    plot_bgcolor='#FAFAFA',
-                    yaxis=dict(title='kWh Terpakai', showgrid=True, gridcolor='#E2E8F0'),
-                    xaxis=dict(title='Waktu Pencatatan')
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    yaxis=dict(title='kWh Terpakai', showgrid=True, gridcolor='rgba(148, 163, 184, 0.2)'),
+                    xaxis=dict(title='Waktu Pencatatan', showgrid=False)
                 )
                 st.plotly_chart(fig1, width="stretch")
             else:
@@ -407,10 +513,11 @@ if not df.empty:
             fig2.update_layout(
                 height=360,
                 margin=dict(l=20, r=20, t=20, b=20),
-                plot_bgcolor='#FAFAFA',
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                yaxis=dict(title='Sisa Meteran (kWh)', showgrid=True, gridcolor='#E2E8F0'),
-                xaxis=dict(title='Waktu Pencatatan')
+                yaxis=dict(title='Sisa Meteran (kWh)', showgrid=True, gridcolor='rgba(148, 163, 184, 0.2)'),
+                xaxis=dict(title='Waktu Pencatatan', showgrid=False)
             )
             st.plotly_chart(fig2, width="stretch")
 
@@ -438,8 +545,9 @@ if not df.empty:
             fig3.update_layout(
                 height=340,
                 margin=dict(l=20, r=20, t=20, b=20),
-                plot_bgcolor='#FAFAFA',
-                yaxis=dict(showgrid=True, gridcolor='#E2E8F0')
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                yaxis=dict(showgrid=True, gridcolor='rgba(148, 163, 184, 0.2)')
             )
             st.plotly_chart(fig3, width="stretch")
             
