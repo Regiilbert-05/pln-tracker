@@ -518,9 +518,11 @@ with tab_dash:
             )
             st.plotly_chart(fig2, width="stretch")
 
-        # Agregasi Pemakaian Harian
+        # Agregasi Pemakaian Harian (kWh & Estimasi Rupiah)
         st.markdown("---")
         st.markdown("##### 📅 Total Konsumsi Listrik per Hari Kalender")
+        st.caption(f"Kalkulasi pemakaian harian berdasarkan estimasi tarif: **~Rp {harga_per_kwh:,.2f} / kWh**")
+        
         df_daily = df.copy()
         df_daily['tgl_hari'] = df_daily['tanggal'].dt.date
         summary_hari = df_daily.groupby('tgl_hari').agg(
@@ -530,24 +532,51 @@ with tab_dash:
             kali_catat=('kwh_meter', 'count')
         ).reset_index()
 
+        summary_hari['estimasi_biaya_rp'] = summary_hari['total_kwh'] * harga_per_kwh
+        summary_hari['tgl_str'] = summary_hari['tgl_hari'].apply(lambda x: x.strftime('%d/%m/%Y'))
+        summary_hari['label_bar'] = summary_hari.apply(
+            lambda r: f"{r['total_kwh']:.2f} kWh<br>(~Rp {r['estimasi_biaya_rp']:,.0f})", axis=1
+        )
+
         fig3 = px.bar(
             summary_hari,
-            x='tgl_hari',
+            x='tgl_str',
             y='total_kwh',
-            text='total_kwh',
-            labels={'tgl_hari': 'Tanggal', 'total_kwh': 'Total Konsumsi (kWh)'},
-            color_discrete_sequence=['#3B82F6']
+            text='label_bar',
+            labels={'tgl_str': 'Tanggal', 'total_kwh': 'Total Konsumsi (kWh)'},
+            color='estimasi_biaya_rp',
+            color_continuous_scale='Blues',
+            custom_data=['estimasi_biaya_rp', 'kali_catat', 'total_rp']
         )
-        fig3.update_traces(texttemplate='%{text:.2f} kWh', textposition='outside')
+        fig3.update_traces(
+            textposition='outside',
+            hovertemplate='<b>Tanggal:</b> %{x}<br><b>Konsumsi:</b> %{y:.2f} kWh<br><b>Estimasi Biaya:</b> ~Rp %{customdata[0]:,.0f}<br><b>Beli Token:</b> Rp %{customdata[2]:,.0f}<br><b>Jumlah Pencatatan:</b> %{customdata[1]}x<extra></extra>'
+        )
         fig3.update_layout(
-            height=280,
-            margin=dict(l=10, r=10, t=15, b=10),
+            height=340,
+            margin=dict(l=10, r=10, t=30, b=10),
+            coloraxis_showscale=False,
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
-            yaxis=dict(showgrid=True, gridcolor='rgba(148, 163, 184, 0.2)'),
+            yaxis=dict(showgrid=True, gridcolor='rgba(148, 163, 184, 0.2)', title='Konsumsi (kWh)'),
             xaxis=dict(title=None)
         )
         st.plotly_chart(fig3, width="stretch")
+
+        # Rincian Tabel Harian (Konsumsi kWh & Biaya Rupiah)
+        with st.expander("🔍 Lihat Rincian Tabel Harian (kWh & Rupiah)"):
+            detail_daily = summary_hari.copy()
+            detail_daily['Tanggal'] = detail_daily['tgl_str']
+            detail_daily['Total Konsumsi'] = detail_daily['total_kwh'].apply(lambda v: f"{v:.2f} kWh")
+            detail_daily['Estimasi Biaya'] = detail_daily['estimasi_biaya_rp'].apply(lambda v: f"Rp {v:,.0f}")
+            detail_daily['Beli Token'] = detail_daily['total_rp'].apply(lambda v: f"Rp {v:,.0f}" if v > 0 else "-")
+            detail_daily['Pencatatan'] = detail_daily['kali_catat'].apply(lambda v: f"{v} kali")
+            
+            st.dataframe(
+                detail_daily[['Tanggal', 'Total Konsumsi', 'Estimasi Biaya', 'Beli Token', 'Pencatatan']],
+                width="stretch",
+                hide_index=True
+            )
 
     else:
         st.info(f"👋 **Selamat datang di profil '{active_meter}'!** Belum ada catatan meteran. Buka tab **📝 Catat Meteran Baru** di atas untuk memasukkan data pertama Anda.")
