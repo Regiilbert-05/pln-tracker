@@ -438,85 +438,128 @@ with tab_dash:
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Visualisasi Grafik Interaktif
-        col_g1, col_g2 = st.columns(2)
-        
-        with col_g1:
-            st.markdown("##### ⚡ Pemakaian Listrik per Sesi (kWh)")
-            if len(df) > 1:
-                df_bar = df.iloc[1:].copy()
-                df_bar['waktu_str'] = df_bar['tanggal'].dt.strftime('%d/%m %H:%M')
-                
-                fig1 = px.bar(
-                    df_bar,
-                    x='waktu_str',
-                    y='kwh_terpakai',
-                    text='kwh_terpakai',
-                    labels={'kwh_terpakai': 'kWh Terpakai', 'waktu_str': 'Waktu Sesi'},
-                    color='kwh_terpakai',
-                    color_continuous_scale='Oranges'
-                )
-                fig1.update_traces(
-                    texttemplate='%{text:.2f}',
-                    textposition='outside',
-                    hovertemplate='<b>Waktu:</b> %{x}<br><b>Pemakaian:</b> %{y:.2f} kWh<extra></extra>'
-                )
-                fig1.update_layout(
-                    height=350,
-                    margin=dict(l=10, r=10, t=15, b=10),
-                    showlegend=False,
-                    coloraxis_showscale=False,
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    yaxis=dict(title='kWh Terpakai', showgrid=True, gridcolor='rgba(148, 163, 184, 0.2)'),
-                    xaxis=dict(title=None, showgrid=False)
-                )
-                st.plotly_chart(fig1, width="stretch")
-            else:
-                st.info("ℹ️ Butuh minimal 2 pencatatan untuk menghitung konsumsi listrik per sesi.")
+        # Visualisasi Grafik Interaktif: Grafik Konsumsi Listrik (Dual-Axis)
+        st.markdown("##### ⚡ Grafik Konsumsi Listrik")
+        st.caption("Grafik garis biru menunjukkan sisa kWh di meteran Anda yang terus menurun, sedangkan garis merah menunjukkan laju tarikan daya (kWh per jam) di rentang waktu tersebut.")
 
-        with col_g2:
-            st.markdown("##### 📈 Tren Sisa Meteran & Pengisian Token")
-            df_line = df.copy()
-            df_line['waktu_str'] = df_line['tanggal'].dt.strftime('%d/%m %H:%M')
+        # Filter Rentang: Keseluruhan atau Per Hari
+        f_c1, f_c2, _ = st.columns([1.6, 2.4, 3], vertical_alignment="center")
+        with f_c1:
+            mode_grafik = st.radio(
+                "Filter Tampilan:",
+                ["🌐 Keseluruhan", "📅 Per Hari"],
+                horizontal=True,
+                label_visibility="collapsed"
+            )
+
+        if mode_grafik == "📅 Per Hari":
+            daftar_tanggal = sorted(df['tanggal'].dt.date.unique(), reverse=True)
+            with f_c2:
+                pilihan_tanggal = st.selectbox(
+                    "Pilih Tanggal:",
+                    daftar_tanggal,
+                    format_func=lambda d: d.strftime('%A, %d %B %Y'),
+                    label_visibility="collapsed"
+                )
             
-            fig2 = go.Figure()
-            # Garis Sisa Meteran
-            fig2.add_trace(go.Scatter(
-                x=df_line['waktu_str'],
-                y=df_line['kwh_meter'],
+            df_hari_ini = df[df['tanggal'].dt.date == pilihan_tanggal].copy()
+            idx_first = df_hari_ini.index[0] if not df_hari_ini.empty else None
+            if idx_first is not None and idx_first > 0:
+                df_view = df.iloc[idx_first - 1 : df_hari_ini.index[-1] + 1].copy()
+            else:
+                df_view = df_hari_ini
+                
+            judul_grafik = f"Grafik Konsumsi Listrik Harian ({pilihan_tanggal.strftime('%d %B %Y')})"
+        else:
+            df_view = df.copy()
+            judul_grafik = "Grafik Konsumsi Listrik (Keseluruhan)"
+
+        if len(df_view) >= 1:
+            fig1 = go.Figure()
+
+            # 1. Garis Biru (Sisa Meteran - Sumbu Kiri / yaxis1)
+            fig1.add_trace(go.Scatter(
+                x=df_view['tanggal'],
+                y=df_view['kwh_meter'],
                 mode='lines+markers',
-                name='Sisa kWh',
-                line=dict(color='#2563EB', width=3),
+                name='Sisa Meteran (kWh)',
+                line=dict(color='#1D4ED8', width=3),
                 marker=dict(size=7, color='#1D4ED8'),
-                hovertemplate='<b>Waktu:</b> %{x}<br><b>Sisa:</b> %{y:.2f} kWh<extra></extra>'
+                yaxis='y1',
+                hovertemplate='<b>Waktu:</b> %{x|%d/%m/%Y %H:%M}<br><b>Sisa Meteran:</b> %{y:.2f} kWh<extra></extra>'
             ))
-            
-            # Marker Pengisian Token
-            isi_df = df_line[df_line['isi_token_kwh'] > 0]
+
+            # 2. Garis Merah (Laju Pemakaian kWh/jam - Sumbu Kanan / yaxis2)
+            if len(df_view) > 1:
+                x_red = []
+                y_red = []
+                for i in range(1, len(df_view)):
+                    t_start = df_view['tanggal'].iloc[i-1]
+                    t_end = df_view['tanggal'].iloc[i]
+                    durasi_jam = max((t_end - t_start).total_seconds() / 3600.0, 0.001)
+                    kwh_used = max(float(df_view['kwh_terpakai'].iloc[i]), 0.0)
+                    rate = kwh_used / durasi_jam
+                    
+                    x_red.extend([t_start, t_end, None])
+                    y_red.extend([rate, rate, None])
+
+                fig1.add_trace(go.Scatter(
+                    x=x_red,
+                    y=y_red,
+                    mode='lines',
+                    name='Laju Pemakaian (kWh/jam)',
+                    line=dict(color='#DC2626', width=3.5),
+                    yaxis='y2',
+                    connectgaps=False,
+                    hovertemplate='<b>Rentang:</b> %{x|%d/%m/%Y %H:%M}<br><b>Laju Tarikan:</b> %{y:.2f} kWh/jam<extra></extra>'
+                ))
+
+            # 3. Marker Bintang Hijau (Pengisian Token)
+            isi_df = df_view[df_view['isi_token_kwh'] > 0]
             if not isi_df.empty:
-                fig2.add_trace(go.Scatter(
-                    x=isi_df['waktu_str'],
+                fig1.add_trace(go.Scatter(
+                    x=isi_df['tanggal'],
                     y=isi_df['kwh_meter'],
                     mode='markers+text',
                     name='Isi Token',
                     text=[f"+{k:.1f} kWh" for k in isi_df['isi_token_kwh']],
                     textposition='top center',
                     marker=dict(color='#16A34A', size=13, symbol='star'),
-                    hovertemplate='<b>Token:</b> +%{text}<br><b>Nominal:</b> Rp %{customdata:,.0f}<extra></extra>',
+                    yaxis='y1',
+                    hovertemplate='<b>Token Masuk:</b> +%{text}<br><b>Nominal:</b> Rp %{customdata:,.0f}<extra></extra>',
                     customdata=isi_df['isi_token_rp']
                 ))
-            
-            fig2.update_layout(
-                height=350,
-                margin=dict(l=10, r=10, t=15, b=10),
+
+            fig1.update_layout(
+                title=dict(text=judul_grafik, font=dict(size=14, color='gray'), x=0.01, y=0.98),
+                height=380,
+                margin=dict(l=10, r=10, t=40, b=15),
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                yaxis=dict(title='Sisa Meteran (kWh)', showgrid=True, gridcolor='rgba(148, 163, 184, 0.2)'),
-                xaxis=dict(title=None, showgrid=False)
+                xaxis=dict(
+                    showgrid=True,
+                    gridcolor='rgba(148, 163, 184, 0.15)',
+                    tickformat='%d %b\n%H:%M' if mode_grafik == "🌐 Keseluruhan" else '%H:%M'
+                ),
+                yaxis=dict(
+                    title=dict(text='Sisa Meteran (kWh)', font=dict(color='#1D4ED8', size=12)),
+                    tickfont=dict(color='#1D4ED8'),
+                    showgrid=True,
+                    gridcolor='rgba(148, 163, 184, 0.15)'
+                ),
+                yaxis2=dict(
+                    title=dict(text='Laju Pemakaian (kWh/jam)', font=dict(color='#DC2626', size=12)),
+                    tickfont=dict(color='#DC2626'),
+                    overlaying='y',
+                    side='right',
+                    showgrid=False,
+                    rangemode='tozero'
+                )
             )
-            st.plotly_chart(fig2, width="stretch")
+            st.plotly_chart(fig1, width="stretch")
+        else:
+            st.info("ℹ️ Belum ada pencatatan pada rentang tanggal yang dipilih.")
 
         # Agregasi Pemakaian Harian (kWh & Estimasi Rupiah)
         st.markdown("---")
