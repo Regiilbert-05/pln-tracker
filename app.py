@@ -1,14 +1,12 @@
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-import streamlit.components.v1 as components
 
-# 1. Konfigurasi Halaman Web (WAJIB pertama)
 st.set_page_config(
     page_title="PLN Electricity Tracker",
     page_icon="⚡",
@@ -16,7 +14,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Pastikan direktori root masuk ke sys.path
 CURRENT_DIR = str(Path(__file__).parent.resolve())
 if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
@@ -24,233 +21,10 @@ if CURRENT_DIR not in sys.path:
 import importlib
 import db
 importlib.reload(db)
+from ui_helper import apply_custom_css, inject_wheel_js, utc_to_local
 
-# 2. Custom CSS Modern (Harmonis Penuh Light & Dark Mode via Streamlit Theme Variables)
-st.markdown("""
-<style>
-    /* Hilangkan spasi berlebih di atas halaman */
-    .block-container {
-        padding-top: 1.8rem;
-        padding-bottom: 3rem;
-        max-width: 1200px;
-    }
-    
-    /* Typography & Header */
-    .app-title {
-        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-        font-weight: 800;
-        font-size: 1.85rem;
-        letter-spacing: -0.02em;
-        color: var(--text-color) !important;
-        margin-bottom: 0.1rem;
-    }
-    .app-subtitle {
-        color: var(--text-color) !important;
-        opacity: 0.75;
-        font-size: 0.95rem;
-        margin-bottom: 1.2rem;
-    }
-    
-    /* Top Header Bar Container */
-    .top-header-box {
-        background-color: var(--secondary-background-color) !important;
-        border: 1px solid rgba(128, 128, 128, 0.25) !important;
-        border-radius: 14px;
-        padding: 1.2rem 1.4rem;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-    }
-    
-    /* Form & Card Containers */
-    .form-card {
-        background-color: var(--secondary-background-color) !important;
-        border: 1px solid rgba(128, 128, 128, 0.25) !important;
-        border-radius: 14px;
-        padding: 1.5rem;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-        margin-bottom: 1.5rem;
-    }
-    .card-header-title {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: var(--text-color) !important;
-        margin-bottom: 0.4rem;
-    }
-    .card-header-subtitle {
-        font-size: 0.85rem;
-        color: var(--text-color) !important;
-        opacity: 0.75;
-        margin-bottom: 1.2rem;
-    }
-    
-    /* Metric Cards */
-    .metric-box {
-        background-color: var(--secondary-background-color) !important;
-        border: 1px solid rgba(128, 128, 128, 0.25) !important;
-        border-radius: 14px;
-        padding: 1.2rem;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
-        text-align: center;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .metric-box:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
-    }
-    .metric-label {
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: var(--text-color) !important;
-        opacity: 0.7;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 0.3rem;
-    }
-    .metric-val {
-        font-size: 1.7rem;
-        font-weight: 800;
-        color: var(--text-color) !important;
-    }
-    .metric-desc {
-        font-size: 0.82rem;
-        color: #3B82F6 !important;
-        font-weight: 600;
-        margin-top: 0.3rem;
-    }
-    
-    /* Badges */
-    .badge {
-        display: inline-block;
-        padding: 0.3rem 0.85rem;
-        font-size: 0.85rem;
-        font-weight: 600;
-        border-radius: 9999px;
-    }
-    .badge-success { background-color: rgba(34, 197, 94, 0.15); color: #22C55E !important; border: 1px solid rgba(34, 197, 94, 0.35); }
-    .badge-warning { background-color: rgba(234, 179, 8, 0.15); color: #EAB308 !important; border: 1px solid rgba(234, 179, 8, 0.35); }
-    .badge-danger  { background-color: rgba(239, 68, 68, 0.15); color: #EF4444 !important; border: 1px solid rgba(239, 68, 68, 0.35); }
-    
-    /* Database Status Pill */
-    .db-pill {
-        font-size: 0.78rem;
-        padding: 0.4rem 0.8rem;
-        border-radius: 20px;
-        font-weight: 600;
-        display: inline-block;
-        text-align: center;
-    }
-    .db-pill-mongo {
-        background-color: rgba(34, 197, 94, 0.15);
-        border: 1px solid rgba(34, 197, 94, 0.4);
-        color: #22C55E !important;
-    }
-    .db-pill-csv {
-        background-color: rgba(234, 179, 8, 0.15);
-        border: 1px solid rgba(234, 179, 8, 0.4);
-        color: #EAB308 !important;
-    }
-    .db-pill-error {
-        background-color: rgba(239, 68, 68, 0.15);
-        border: 1px solid rgba(239, 68, 68, 0.4);
-        color: #EF4444 !important;
-    }
-
-    /* Tab Header Enhancement */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 48px;
-        white-space: pre-wrap;
-        background-color: var(--secondary-background-color) !important;
-        border: 1px solid rgba(128, 128, 128, 0.25);
-        border-bottom: none;
-        border-radius: 10px 10px 0 0;
-        padding: 10px 20px;
-        font-weight: 600;
-        color: var(--text-color) !important;
-        opacity: 0.75;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #2563EB !important;
-        color: #FFFFFF !important;
-        border-color: #2563EB !important;
-        opacity: 1.0 !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Injeksi JavaScript untuk Mouse Hover Scroll Wheel Override pada input angka, jam, menit, dan sisa kWh
-wheel_js_code = """
-<script>
-(function() {
-    try {
-        const parentDoc = window.parent ? window.parent.document : document;
-        const parentWin = window.parent || window;
-
-        if (parentWin.__wheelOverrideInitialized) return;
-        parentWin.__wheelOverrideInitialized = true;
-
-        parentDoc.addEventListener('wheel', function(e) {
-            const container = e.target.closest('div[data-testid="stNumberInput"]');
-            if (!container) return;
-
-            const input = container.querySelector('input');
-            if (!input) return;
-
-            e.preventDefault();
-            e.stopPropagation();
-
-            let currentVal = parseFloat(input.value);
-            if (isNaN(currentVal)) currentVal = 0;
-
-            let stepAttr = input.getAttribute('step');
-            let step = stepAttr ? parseFloat(stepAttr) : (input.value.includes('.') ? 0.1 : 1.0);
-            if (isNaN(step) || step <= 0) step = 1.0;
-
-            let minAttr = input.getAttribute('min');
-            let maxAttr = input.getAttribute('max');
-            let min = minAttr !== null ? parseFloat(minAttr) : null;
-            let max = maxAttr !== null ? parseFloat(maxAttr) : null;
-
-            // Scroll Up = Tambah (+), Scroll Down = Kurang (-)
-            let delta = e.deltaY < 0 ? step : -step;
-            
-            let decimals = 0;
-            if (step.toString().includes('.')) {
-                decimals = step.toString().split('.')[1].length;
-            } else if (input.value.includes('.')) {
-                decimals = input.value.split('.')[1].length;
-            }
-            
-            let newVal = parseFloat((currentVal + delta).toFixed(Math.max(decimals, 0)));
-
-            if (min !== null && newVal < min) newVal = min;
-            if (max !== null && newVal > max) newVal = max;
-
-            // Fokus, set value, dan dispatch event komplit agar langsung ter-commit ke backend Streamlit
-            try { input.focus(); } catch(e) {}
-            
-            const nativeSetter = Object.getOwnPropertyDescriptor(parentWin.HTMLInputElement.prototype, 'value').set;
-            nativeSetter.call(input, newVal);
-
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            input.dispatchEvent(new Event('change', { bubbles: true }));
-            
-            // Simulasi Enter key & Blur agar Streamlit widget manager langsung mengirim nilai baru ke Python
-            input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-            input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
-            input.dispatchEvent(new Event('blur', { bubbles: true }));
-        }, { passive: false });
-    } catch (err) {}
-})();
-</script>
-"""
-
-if hasattr(st, "iframe"):
-    st.iframe(wheel_js_code, height=1)
-else:
-    components.html(wheel_js_code, height=0, width=0)
+apply_custom_css()
+inject_wheel_js()
 
 # 3. Logika Perhitungan Konsumsi Listrik
 def calculate_usage(df_input):
@@ -645,43 +419,52 @@ with tab_input:
     # 1. Waktu Pencatatan (Langsung di Form: Mendukung Scroll Wheel & Preset Cepat)
     st.markdown("##### 📅 1. Waktu Pencatatan")
     
+    # Ambil waktu sekarang sesuai timezone lokal
+    now_local = utc_to_local(datetime.now(timezone.utc))
+
     # Inisialisasi state waktu jika belum ada
     if "input_date" not in st.session_state:
-        st.session_state["input_date"] = datetime.now().date()
+        st.session_state["input_date"] = now_local.date()
     if "input_hour" not in st.session_state:
-        st.session_state["input_hour"] = datetime.now().hour
+        st.session_state["input_hour"] = now_local.hour
     if "input_minute" not in st.session_state:
-        st.session_state["input_minute"] = datetime.now().minute
+        st.session_state["input_minute"] = now_local.minute
 
-    # Preset Cepat 1-Klik
+    # Preset Cepat 1-Klik - Tidak perlu st.rerun()
     q_col1, q_col2, q_col3, q_col4, _ = st.columns([1.2, 1.2, 1.2, 1.2, 3])
     with q_col1:
-        if st.button("🕒 Sekarang", use_container_width=True):
-            now_dt = datetime.now()
+        if st.button("🕒 Sekarang", use_container_width=True, key="preset_now"):
+            now_dt = utc_to_local(datetime.now(timezone.utc))
             st.session_state["input_date"] = now_dt.date()
             st.session_state["input_hour"] = now_dt.hour
             st.session_state["input_minute"] = now_dt.minute
-            st.rerun()
     with q_col2:
-        if st.button("🌅 08:00", use_container_width=True):
+        if st.button("🌅 08:00", use_container_width=True, key="preset_8"):
             st.session_state["input_hour"] = 8
             st.session_state["input_minute"] = 0
-            st.rerun()
     with q_col3:
-        if st.button("☀️ 13:00", use_container_width=True):
+        if st.button("☀️ 13:00", use_container_width=True, key="preset_13"):
             st.session_state["input_hour"] = 13
             st.session_state["input_minute"] = 0
-            st.rerun()
     with q_col4:
-        if st.button("🌙 21:00", use_container_width=True):
+        if st.button("🌙 21:00", use_container_width=True, key="preset_21"):
             st.session_state["input_hour"] = 21
             st.session_state["input_minute"] = 0
-            st.rerun()
 
     # Kolom Input Tanggal, Jam, dan Menit
+    def sync_time_to_state():
+        st.session_state["input_date"] = st.session_state["tgl_input_key"]
+        st.session_state["input_hour"] = st.session_state["jam_input_key"]
+        st.session_state["input_minute"] = st.session_state["menit_input_key"]
+
     col_tgl, col_jam, col_menit = st.columns([2, 1, 1])
     with col_tgl:
-        tgl_pick = st.date_input("Tanggal Pencatatan", value=st.session_state["input_date"])
+        tgl_pick = st.date_input(
+            "Tanggal Pencatatan", 
+            value=st.session_state["input_date"],
+            key="tgl_input_key",
+            on_change=sync_time_to_state
+        )
     with col_jam:
         jam_pick = st.number_input(
             "Jam (00 - 23)",
@@ -690,7 +473,9 @@ with tab_input:
             value=st.session_state["input_hour"],
             step=1,
             format="%02d",
-            help="Hover mouse dan scroll roda mouse untuk mengubah jam"
+            help="Hover mouse dan scroll roda mouse untuk mengubah jam",
+            key="jam_input_key",
+            on_change=sync_time_to_state
         )
     with col_menit:
         menit_pick = st.number_input(
@@ -700,7 +485,9 @@ with tab_input:
             value=st.session_state["input_minute"],
             step=1,
             format="%02d",
-            help="Hover mouse dan scroll roda mouse untuk mengubah menit"
+            help="Hover mouse dan scroll roda mouse untuk mengubah menit",
+            key="menit_input_key",
+            on_change=sync_time_to_state
         )
 
     waktu_terpilih = datetime(
@@ -846,16 +633,19 @@ with tab_history:
             beli_str = f"Rp {int(row['isi_token_rp']):,}" if row['isi_token_rp'] > 0 else "-"
             token_str = f"{row['isi_token_kwh']:.2f} kWh" if row['isi_token_kwh'] > 0 else "-"
             
-            with c1: st.markdown(f"**{row['Waktu']}**")
+            # Tampilkan waktu lokal
+            waktu_display = utc_to_local(pd.to_datetime(row['tanggal_raw'])).strftime('%d/%m/%Y %H:%M')
+            
+            with c1: st.markdown(f"**{waktu_display}**")
             with c2: st.markdown(f"{row['kwh_meter']:.2f} kWh")
             with c3: st.markdown(f"{row['kwh_terpakai']:.2f} kWh")
             with c4: st.markdown(beli_str)
             with c5: st.markdown(token_str)
             with c6:
-                if st.button("🗑️", key=f"btn_del_{idx}", help=f"Hapus catatan {row['Waktu']}"):
+                if st.button("🗑️", key=f"btn_del_{idx}", help=f"Hapus catatan {waktu_display}"):
                     st.session_state["delete_target_item"] = {
                         "tanggal_raw": row['tanggal_raw'],
-                        "waktu": row['Waktu'],
+                        "waktu": waktu_display,
                         "kwh": row['kwh_meter']
                     }
                     st.rerun()
