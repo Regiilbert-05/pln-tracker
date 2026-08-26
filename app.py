@@ -430,7 +430,7 @@ with tab_input:
     if "input_minute" not in st.session_state:
         st.session_state["input_minute"] = now_local.minute
 
-    # Preset Cepat 1-Klik - Tidak perlu st.rerun()
+    # Preset Cepat 1-Klik - Update key widget & rerun
     q_col1, q_col2, q_col3, q_col4, _ = st.columns([1.2, 1.2, 1.2, 1.2, 3])
     with q_col1:
         if st.button("🕒 Sekarang", use_container_width=True, key="preset_now"):
@@ -438,18 +438,31 @@ with tab_input:
             st.session_state["input_date"] = now_dt.date()
             st.session_state["input_hour"] = now_dt.hour
             st.session_state["input_minute"] = now_dt.minute
+            st.session_state["tgl_input_key"] = now_dt.date()
+            st.session_state["jam_input_key"] = now_dt.hour
+            st.session_state["menit_input_key"] = now_dt.minute
+            st.rerun()
     with q_col2:
         if st.button("🌅 08:00", use_container_width=True, key="preset_8"):
             st.session_state["input_hour"] = 8
             st.session_state["input_minute"] = 0
+            st.session_state["jam_input_key"] = 8
+            st.session_state["menit_input_key"] = 0
+            st.rerun()
     with q_col3:
         if st.button("☀️ 13:00", use_container_width=True, key="preset_13"):
             st.session_state["input_hour"] = 13
             st.session_state["input_minute"] = 0
+            st.session_state["jam_input_key"] = 13
+            st.session_state["menit_input_key"] = 0
+            st.rerun()
     with q_col4:
         if st.button("🌙 21:00", use_container_width=True, key="preset_21"):
             st.session_state["input_hour"] = 21
             st.session_state["input_minute"] = 0
+            st.session_state["jam_input_key"] = 21
+            st.session_state["menit_input_key"] = 0
+            st.rerun()
 
     # Kolom Input Tanggal, Jam, dan Menit
     def sync_time_to_state():
