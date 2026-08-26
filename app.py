@@ -422,13 +422,13 @@ with tab_input:
     # Ambil waktu sekarang sesuai timezone lokal
     now_local = utc_to_local(datetime.now(timezone.utc))
 
-    # Inisialisasi state waktu jika belum ada
-    if "input_date" not in st.session_state:
-        st.session_state["input_date"] = now_local.date()
-    if "input_hour" not in st.session_state:
-        st.session_state["input_hour"] = now_local.hour
-    if "input_minute" not in st.session_state:
-        st.session_state["input_minute"] = now_local.minute
+    # Inisialisasi state widget kunci jika belum ada
+    if "tgl_input_key" not in st.session_state:
+        st.session_state["tgl_input_key"] = now_local.date()
+    if "jam_input_key" not in st.session_state:
+        st.session_state["jam_input_key"] = now_local.hour
+    if "menit_input_key" not in st.session_state:
+        st.session_state["menit_input_key"] = now_local.minute
 
     # Preset Cepat 1-Klik - Update key widget & rerun
     q_col1, q_col2, q_col3, q_col4, _ = st.columns([1.2, 1.2, 1.2, 1.2, 3])
@@ -469,12 +469,11 @@ with tab_input:
         st.session_state["input_date"] = st.session_state["tgl_input_key"]
         st.session_state["input_hour"] = st.session_state["jam_input_key"]
         st.session_state["input_minute"] = st.session_state["menit_input_key"]
-
+    
     col_tgl, col_jam, col_menit = st.columns([2, 1, 1])
     with col_tgl:
         tgl_pick = st.date_input(
             "Tanggal Pencatatan", 
-            value=st.session_state["input_date"],
             key="tgl_input_key",
             on_change=sync_time_to_state
         )
@@ -483,7 +482,6 @@ with tab_input:
             "Jam (00 - 23)",
             min_value=0,
             max_value=23,
-            value=st.session_state["input_hour"],
             step=1,
             format="%02d",
             help="Hover mouse dan scroll roda mouse untuk mengubah jam",
@@ -495,7 +493,6 @@ with tab_input:
             "Menit (00 - 59)",
             min_value=0,
             max_value=59,
-            value=st.session_state["input_minute"],
             step=1,
             format="%02d",
             help="Hover mouse dan scroll roda mouse untuk mengubah menit",
